@@ -2,3 +2,7 @@
 weights/
 *.mp4
 __pycache__/
+.venv/
+logs/
+AI_MODULES_MQTT.md
+TTS_Tuan2.pdf

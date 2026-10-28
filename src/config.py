@@ -1,0 +1,23 @@
+# đọc .env (ngưỡng, cooldown, margin...)
+import os
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+MODULE = "WATER_LEVEL_DETECTION"
+ZONE_ID = 51
+ORG_ID = 103
+
+MQTT_HOST = os.environ["MQTT_HOST"]
+MQTT_PORT = int(os.getenv("MQTT_PORT", "433"))
+MQTT_PATH = os.getenv("MQTT_PATH", "/mqtt")
+MQTT_USER = os.environ["MQTT_USER"]
+MQTT_PASS = os.environ["MQTT_PASS"]
+MQTT_CLIENT_ID = os.getenv("MQTT_CLIENT_ID", "tts_quan_01")
+
+STORAGE_URL = os.getenv("STORAGE_URL", "https://aioc-stg.atin.vn/storage/upload/file")
+
+THRESHOLD_CM = float(os.getenv("THRESHOLD_CM", "50"))
+MARGIN_CM = float(os.getenv("MARGIN_CM", "5"))
+COOLDOWN_S = float(os.getenv("COOLDOWN_S", "300"))

@@ -6,18 +6,22 @@ import threading
 
 import paho.mqtt.client as mqtt
 
+from src.publisher import publish_event
+
 from src import config
 from src.config_manager import ConfigManager, CameraConfig
 from src.worker import CameraWorker
 
 log = logging.getLogger("mqtt_client")
 
-TOPIC_CAMERA = f"smart_vms/cameras/zone/{config.ZONE_ID}"
+TOPIC_CAMERAS = f"smart_vms/cameras/zone/{config.ZONE_ID}"
 TOPIC_ZONES = f"smart_vms/cameras/+/ai_zones/{config.MODULE}"
 TOPIC_GETDEVICE = "smart_vms/cameras/getdevice"
 
 workers: dict[str, CameraWorker] = {}
 workers_lock = threading.Lock()
+
+mqtt_client: mqtt.Client | None = None
 
 def on_start(
     camera: CameraConfig,
@@ -31,7 +35,24 @@ def on_start(
             existing.update_zones(zones)
             return
 
-        worker = CameraWorker(camera=camera, zones=zones)
+        client = mqtt_client
+        if client is None:
+            raise RuntimeError("MQTT client chưa được khởi tạo")
+
+        def send_alert(level_cm: float, jpg: bytes) -> bool:
+            return publish_event(
+                client=client,
+                cam_id=camera.id,
+                cam_code=camera.code,
+                level_cm=level_cm,
+                jpg=jpg,
+            )
+
+        worker = CameraWorker(
+            camera=camera,
+            zones=zones,
+            publish_alert=send_alert,
+        )
         workers[camera.code] = worker
 
         try:
@@ -72,6 +93,8 @@ def on_update(
 cfg = ConfigManager(on_start, on_stop, on_update)
 
 def build_client() -> mqtt.Client:
+    global mqtt_client
+
     c = mqtt.Client(
         mqtt.CallbackAPIVersion.VERSION2,
         client_id=config.MQTT_CLIENT_ID,
@@ -85,9 +108,17 @@ def build_client() -> mqtt.Client:
     def on_connect(client, userdata, flags, reason_code, properties=None):
         log.info("Connected: %s", reason_code)
         if reason_code != 0:
+            log.error("Kết nối thất bại (%s)", reason_code)
+            client.disconnect()
             return
 
-        client.subscribe([(TOPIC_CAMERA, 1), (TOPIC_ZONES, 1)], qos=1)
+        rc, mid = client.subscribe([(TOPIC_CAMERAS, 1), (TOPIC_ZONES, 1)], qos=1)
+        log.info(
+            "SUBSCRIBE sent rc=%s mid=%s topics=%s",
+            rc,
+            mid,
+            [TOPIC_CAMERAS, TOPIC_ZONES],
+        )
         client.publish(
             TOPIC_GETDEVICE,
             json.dumps({
@@ -103,14 +134,28 @@ def build_client() -> mqtt.Client:
 
     def on_message(client, userdata, msg):
         try:
-            if msg.topic == TOPIC_CAMERA:
+            log.info(
+                "MQTT RX topic=%s qos=%s retained=%s bytes=%d",
+                msg.topic,
+                msg.qos,
+                msg.retain,
+                len(msg.payload),
+            )
+
+            if msg.topic == TOPIC_CAMERAS:
                 cfg.handle_cameras(msg.payload)
             elif msg.topic.endswith(f"/ai_zones/{config.MODULE}"):
                 cfg.handle_zones(msg.topic.split("/")[2], msg.payload)
         except Exception:
             log.exception("lỗi xử lý %s", msg.topic)
 
+    def on_subscribe(client, userdata, mid, reason_codes, properties):
+        log.info("SUBACK mid=%s reason_codes=%s", mid, reason_codes)
+
+    c.on_subscribe = on_subscribe
     c.on_connect = on_connect
     c.on_disconnect = on_disconnect
     c.on_message = on_message
+
+    mqtt_client = c
     return c

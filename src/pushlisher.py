@@ -1,1 +1,0 @@
-# Bước 6: upload ảnh, publish event + bbox

@@ -1,9 +1,17 @@
 # Bước 3: 1 camera = 1 thread, đọc RTSP
 import logging
 import threading
-from collections.abc import Sequence
+import time
+from collections.abc import Callable, Sequence
+from pathlib import Path
 
 import cv2
+
+from src.detector import WaterDetector
+from src.waterline import load_calibration, water_surface_y, level_band
+
+import src.config as cf
+from src.state import AlertState
 
 from src.config_manager import CameraConfig
 
@@ -14,9 +22,15 @@ READ_TIMEOUT_MS = 5_000
 RECONNECT_DELAY_S = 3
 
 class CameraWorker:
-    def __init__(self, camera: CameraConfig, zones: Sequence[dict[str, object]]) -> None:
+    def __init__(
+        self,
+        camera: CameraConfig,
+        zones: Sequence[dict[str, object]],
+        publish_alert: Callable[[float, bytes], bool],
+    ) -> None:
         self.camera = camera
         self._zones = list(zones)
+        self._publish_alert = publish_alert
         self._zones_lock = threading.Lock()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
@@ -53,6 +67,16 @@ class CameraWorker:
             log.warning("Worker camera=%s chưa dừng sau %.1f giây", self.camera.code, timeout)
 
     def _run(self) -> None:
+        alert_state = AlertState()
+        last_measurement_log = 0.0
+
+        # Khởi tạo model
+        project_dir = Path(__file__).resolve().parents[1]
+        calibration = load_calibration(
+            project_dir / "resources" / "config" / "water_marks.json"
+        )
+        detector = WaterDetector()
+
         while not self._stop_event.is_set():
             capture = None
 
@@ -69,7 +93,7 @@ class CameraWorker:
                 )
 
                 if not capture.isOpened():
-                    log.warning(f"Không mở được RTSP camera=%s, {self.camera.rtsp_url}", self.camera.code)
+                    log.warning("Không mở được RTSP rtsp=%s camera=%s", self.camera.rtsp_url, self.camera.code)
                 else:
                     log.info("Đã mở RTSP camera=%s", self.camera.code)
 
@@ -77,12 +101,53 @@ class CameraWorker:
                         ok, frame = capture.read()
 
                         if not ok or frame is None:
-                            log.warning("Mất frame RTSP camera=%s; sẽ thử kết nối lại", self.camera.code)
+                            log.warning(
+                                "Không đọc được frame: camera=%s, ok=%s, frame_is_none=%s",
+                                self.camera.code,
+                                ok,
+                                frame is None,
+                            )
                             break
 
-                        # Bước sau sẽ chuyển frame và zones_snapshot() vào detector.
+                        water_mask = detector.predict_water_mask(frame)
+                        surface_y = water_surface_y(water_mask, calibration)
+                        level_cm = level_band(surface_y, calibration)
+
+                        now = time.monotonic()
+                        if now - last_measurement_log >= 10.0:
+                            log.info(
+                                "Water measurement camera=%s surface_y=%s level_band_cm=%s",
+                                self.camera.code,
+                                None if surface_y is None else round(surface_y, 4),
+                                level_cm,
+                            )
+                            last_measurement_log = now
+
+                        if alert_state.should_report(
+                            band_cm=level_cm,
+                            calibration=calibration,
+                            now=now,
+                            cooldown_s=cf.COOLDOWN_S,
+                            margin_cm=cf.MARGIN_CM,
+                        ):
+                            encoded_ok, encoded = cv2.imencode(".jpg", frame)
+
+                            if not encoded_ok:
+                                log.error("Không mã hóa được snapshot camera=%s", self.camera.code)
+                                success = False
+                            else:
+                                try:
+                                    success = self._publish_alert(level_cm, encoded.tobytes())
+                                except Exception:
+                                    log.exception("Gửi cảnh báo lỗi camera=%s", self.camera.code)
+                                    success = False
+
+                            alert_state.record_attempt(
+                                now=time.monotonic(),
+                                success=success,
+                            )
                 
-            except cv2.error:
+            except Exception:
                 log.exception("OpenCV gặp lỗi với camera=%s", self.camera.code)
 
             finally:

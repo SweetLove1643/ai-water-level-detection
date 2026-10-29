@@ -18,6 +18,5 @@ MQTT_CLIENT_ID = os.getenv("MQTT_CLIENT_ID", "tts_quan_01")
 
 STORAGE_URL = os.getenv("STORAGE_URL", "https://aioc-stg.atin.vn/storage/upload/file")
 
-THRESHOLD_CM = float(os.getenv("THRESHOLD_CM", "50"))
 MARGIN_CM = float(os.getenv("MARGIN_CM", "5"))
 COOLDOWN_S = float(os.getenv("COOLDOWN_S", "300"))

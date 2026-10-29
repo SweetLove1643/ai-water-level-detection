@@ -37,12 +37,12 @@ def setup_logging() -> None:
     )
     file_handler.setLevel(LOG_LEVEL)
     file_handler.setFormatter(formatter)
-    # file_handler.addFilter(MaskCredentials())
+    file_handler.addFilter(MaskCredentials())
 
     console = logging.StreamHandler()
     console.setLevel(LOG_LEVEL)
     console.setFormatter(formatter)
-    # console.addFilter(MaskCredentials())
+    console.addFilter(MaskCredentials())
 
     root = logging.getLogger()
     root.setLevel(LOG_LEVEL)

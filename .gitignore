@@ -1,8 +1,27 @@
+# Local credentials and Python environments
 .env
-weights/
-*.mp4
-__pycache__/
 .venv/
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Runtime and training outputs
 logs/
+runs/
+weights/
+*.pt
+
+# Local datasets and media
+resources/data/
+resources/val_v2/
+resources/water_seg_v2/
+resources/videos/
+*.mp4
+
+# Generated debug output and local reference document
+/resources/waterline_debug.jpg
+/TTS_Tuan2.pdf
+
 AI_MODULES_MQTT.md
-TTS_Tuan2.pdf

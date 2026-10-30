@@ -48,24 +48,41 @@ class ConfigManager:
     def _reconcile(self) -> None:
         with self._lock:
             want = set(self._cameras)
+            running = set(self._running)
 
             start = want - self._running
             stop = self._running - want   
 
-            snap = {
-                code: (self._cameras[code])
-                for code in want
+            cameras_to_start = {
+                code: self._cameras[code]
+                for code in start
             }
 
-        for c in stop:
-            self.on_stop(c)
-        for c in start:
-            self.on_start(snap[c])
-        self._running = want
+        for code in stop:
+            try:
+                self.on_stop(code)
+            except Exception:
+                log.exception("on_stop failed for camera=%s", code)
+            else:
+                with self._lock:
+                    self._running.discard(code)
+        for code in start:
+            try:
+                self.on_start(cameras_to_start[code])
+            except Exception:
+                log.exception("on_start failed for camera=%s", code)
+            else:
+                with self._lock:
+                    self._running.add(code)
+
+        with self._lock:
+            running_snapshot = sorted(self._running)
+            cameras_snapshot = sorted(self._cameras)
 
         log.info(
-            "RECONCILE cameras=%s start=%s stop=%s",
-            list(self._cameras),
+            "RECONCILE cameras=%s running=%s start=%s stop=%s",
+            cameras_snapshot,
+            running_snapshot,
             sorted(start),
             sorted(stop),
         )

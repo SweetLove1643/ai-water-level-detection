@@ -20,3 +20,6 @@ STORAGE_URL = os.getenv("STORAGE_URL", "https://aioc-stg.atin.vn/storage/upload/
 
 MARGIN_CM = float(os.getenv("MARGIN_CM", "5"))
 COOLDOWN_S = float(os.getenv("COOLDOWN_S", "300"))
+
+WEIGHT_WATER_MODEL_SEGMENT_PATH=os.getenv("WEIGHT_WATER_MODEL_SEGMENT_PATH")
+WATER_MODEL_SEGMENT_CONFIDENCE=os.getenv("WATER_MODEL_SEGMENT_CONFIDENCE")

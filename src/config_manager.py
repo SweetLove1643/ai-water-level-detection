@@ -44,7 +44,7 @@ class ConfigManager:
         }
         with self._lock:
             self._cameras =enabled
-        log.info("camera bật %s: %s", MODULE, list(enabled))
+        log.info("Camera bật module: %s: %s", MODULE, list(enabled))
         self._reconcile()
 
     def handle_zones(self, topic_code: str, raw: bytes) -> None:

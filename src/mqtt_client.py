@@ -113,12 +113,8 @@ def build_client() -> mqtt.Client:
             return
 
         rc, mid = client.subscribe([(TOPIC_CAMERAS, 1), (TOPIC_ZONES, 1)], qos=1)
-        log.info(
-            "SUBSCRIBE sent rc=%s mid=%s topics=%s",
-            rc,
-            mid,
-            [TOPIC_CAMERAS, TOPIC_ZONES],
-        )
+        if rc == 0:
+            log.info("Send Subscribe sucessfull!, mid=%s, topics=%s", mid, [TOPIC_CAMERAS, TOPIC_ZONES])
         client.publish(
             TOPIC_GETDEVICE,
             json.dumps({
@@ -141,6 +137,7 @@ def build_client() -> mqtt.Client:
                 msg.retain,
                 len(msg.payload),
             )
+            print("Debug payload =%s", type(msg))
 
             if msg.topic == TOPIC_CAMERAS:
                 cfg.handle_cameras(msg.payload)
@@ -150,7 +147,7 @@ def build_client() -> mqtt.Client:
             log.exception("lỗi xử lý %s", msg.topic)
 
     def on_subscribe(client, userdata, mid, reason_codes, properties):
-        log.info("SUBACK mid=%s reason_codes=%s", mid, reason_codes)
+        log.info("Subscribe sucessfull!. mid=%s", mid)
 
     c.on_subscribe = on_subscribe
     c.on_connect = on_connect

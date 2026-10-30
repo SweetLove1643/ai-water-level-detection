@@ -9,7 +9,6 @@ class WaterDetector:
     def __init__(self, weights_path: str | Path | None = None, confidence: float = 0.6) -> None:
         if not 0.0 <= confidence <= 1.0:
             raise ValueError("Ngưỡng confidence model lỗi")
-        weights_path = Path("D:/Project/ATIN/water_level_detection/runs/water_seg_v2/weights/best.pt")
         if weights_path is None or not weights_path.is_file():
             raise FileNotFoundError(f"Model path failed: {weights_path}")
         self._model = YOLO(str(weights_path))

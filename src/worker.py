@@ -75,7 +75,12 @@ class CameraWorker:
         calibration = load_calibration(
             project_dir / "resources" / "config" / "water_marks.json"
         )
-        detector = WaterDetector()
+
+        weight_path = Path(cf.WEIGHT_WATER_MODEL_SEGMENT_PATH)
+        confidence = float(cf.WATER_MODEL_SEGMENT_CONFIDENCE)
+        
+        print(weight_path, confidence, isinstance(weight_path, str), isinstance(confidence, int), type(confidence))
+        detector = WaterDetector(weights_path=weight_path, confidence=confidence)
 
         while not self._stop_event.is_set():
             capture = None

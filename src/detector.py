@@ -24,7 +24,7 @@ class WaterDetector:
         if not self._water_class_ids:
             raise ValueError(f"Model classes not contain 'water': {names}")
 
-    def predict_water_mask(self, frame: np.ndarray) -> np.ndarray:
+    def predict_with_detections(self, frame: np.ndarray) -> tuple[np.ndarray, list[dict[str, object]]]:
         if frame.ndim != 3 or frame.shape[2] != 3:
             raise ValueError("frame must be a color image with shape (height, width, 3)")
 
@@ -39,21 +39,27 @@ class WaterDetector:
         )
 
         if not results:
-            return water_mask.astype(np.uint8) * 255
+            return water_mask.astype(np.uint8) * 255, []
 
         result = results[0]
         if result.boxes is None or result.masks is None:
-            return water_mask.astype(np.uint8) * 255
+            return water_mask.astype(np.uint8) * 255, []
 
         class_ids = result.boxes.cls.int().cpu().numpy()
+        confidences = result.boxes.conf.cpu().numpy()
+        boxes = result.boxes.xyxy.cpu().numpy()
         masks = result.masks.data.cpu().numpy()
+
+        detections = []
 
         if len(class_ids) != len(masks):
             raise RuntimeError(
                 f"Number of classes and masks do not match: {len(class_ids)} != {len(masks)}"
             )
 
-        for class_id, predicted_mask in zip(class_ids, masks):
+        for class_id, confidence, box, predicted_mask in zip(
+            class_ids, confidences, boxes, masks
+        ):
             if int(class_id) not in self._water_class_ids:
                 continue
 
@@ -66,4 +72,18 @@ class WaterDetector:
 
             water_mask |= predicted_mask > 0
 
-        return water_mask.astype(np.uint8) * 255
+            x1, y1, x2, y2 = box
+            detections.append({
+                "class": "water",
+                "confidence": float(confidence),
+                "bbox": [
+                    float(x1 / width),
+                    float(y1 / height),
+                    float(x2 / width),
+                    float(y2 / height),
+                ],
+            })
+
+        return water_mask.astype(np.uint8) * 255, detections
+
+    

@@ -6,8 +6,7 @@ import threading
 
 import paho.mqtt.client as mqtt
 
-from src.publisher import publish_event
-
+from src.publisher import publish_bbox, publish_event
 from src import config
 from src.config_manager import ConfigManager, CameraConfig
 from src.worker import CameraWorker
@@ -38,10 +37,23 @@ def on_start(
                 level_cm=level_cm,
                 jpg=jpg,
             )
+        
+        def send_bbox(
+            detections: list[dict[str, object]],
+            hud_text: str,
+        ) -> bool:
+            publish_bbox(
+                client=client,
+                cam_id=camera.id,
+                cam_code=camera.code,
+                detections=detections,
+                hud_text=hud_text,
+            )
 
         worker = CameraWorker(
             camera=camera,
             publish_alert=send_alert,
+            publish_bbox=send_bbox,
         )
         workers[camera.code] = worker
 

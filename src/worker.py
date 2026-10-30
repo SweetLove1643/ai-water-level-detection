@@ -8,7 +8,12 @@ from pathlib import Path
 import cv2
 
 from src.detector import WaterDetector
-from src.waterline import load_calibration, water_surface_y, level_band
+from src.waterline import (
+    Calibration,
+    load_calibration,
+    water_surface_y,
+    level_band,
+)
 
 import src.config as cf
 from src.state import AlertState
@@ -21,14 +26,45 @@ OPEN_TIMEOUT_MS = 5_000
 READ_TIMEOUT_MS = 5_000
 RECONNECT_DELAY_S = 3
 
+def calibration_overlays(
+    calibration: Calibration,
+    padding: float = 0.001,
+) -> list[dict[str, object]]:
+    xs = [x for x, _ in calibration.roi_points]
+    ys = [y for _, y in calibration.roi_points]
+
+    overlays: list[dict[str, object]] = [{
+        "id": "measurement-roi",
+        "class": "MEASUREMENT_ROI",
+        "bbox": [min(xs), min(ys), max(xs), max(ys)],
+    }]
+
+    for mark in calibration.marks:
+        x1, y1 = mark.p1
+        x2, y2 = mark.p2
+        overlays.append({
+            "id": f"mark-{mark.cm:g}cm",
+            "class": f"MARK_{mark.cm:g}CM",
+            "bbox": [
+                max(0.0, min(x1, x2) - padding),
+                max(0.0, min(y1, y2) - padding),
+                min(1.0, max(x1, x2) + padding),
+                min(1.0, max(y1, y2) + padding),
+            ],
+        })
+
+    return overlays
+
 class CameraWorker:
     def __init__(
         self,
         camera: CameraConfig,
         publish_alert: Callable[[float, bytes], bool],
+        publish_bbox: Callable[[list[dict[str, object]], str], bool],
     ) -> None:
         self.camera = camera
         self._publish_alert = publish_alert
+        self._publish_bbox = publish_bbox
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -57,10 +93,12 @@ class CameraWorker:
     def _run(self) -> None:
         alert_state = AlertState()
         last_measurement_log = 0.0
+        last_bbox_publish = 0.0
 
         # Khởi tạo model
         water_marks_path = Path(cf.WATER_MARKS_CONFIG_PATH)
         calibration = load_calibration(water_marks_path)
+        calibration_detections = calibration_overlays(calibration)
 
         weight_path = Path(cf.WEIGHT_WATER_MODEL_SEGMENT_PATH)
         confidence = float(cf.WATER_MODEL_SEGMENT_CONFIDENCE)
@@ -99,11 +137,23 @@ class CameraWorker:
                             )
                             break
 
-                        water_mask = detector.predict_water_mask(frame)
+                        water_mask, detections = detector.predict_with_detections(frame)
                         surface_y = water_surface_y(water_mask, calibration)
                         level_cm = level_band(surface_y, calibration)
 
                         now = time.monotonic()
+                        if now - last_bbox_publish >= 0.005:
+                            hud_text = (
+                                f"Mực nước: {level_cm:g} cm"
+                                if level_cm is not None
+                                else "Mực nước: chưa xác định"
+                            )
+                            self._publish_bbox(
+                                [*detections, *calibration_detections],
+                                hud_text,
+                            )
+                            last_bbox_publish = now
+                        
                         if now - last_measurement_log >= 10.0:
                             log.info(
                                 "Water measurement camera=%s surface_y=%s level_band_cm=%s",
@@ -148,3 +198,4 @@ class CameraWorker:
                 self._stop_event.wait(RECONNECT_DELAY_S)
 
         log.info("Worker camera=%s has stopped", self.camera.code)
+

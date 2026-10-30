@@ -93,13 +93,32 @@ def publish_event(client,
 def publish_bbox(client, cam_id: str, cam_code: str,
                  detections: list[dict], hud_text: str) -> None:
     """QoS 0, toạ độ bbox chuẩn hoá 0..1, gửi liên tục theo frame."""
+    topic = f"smart_vms/ai/bbox/{cam_code}"
     msg = {
         "camera_code": cam_code,
         "camera_id": cam_id,
         "ai_modules": cf.MODULE,
         "timestamp": time.time(),
         "detections": detections,
-        "hud": {"text": hud_text, "display_ms": 1000, "color": "#22c55e"},
+        "hud": {
+            "text": hud_text,
+            "display_ms": 1000,
+            "color": "#22c55e",
+        },
     }
-    client.publish(f"smart_vms/ai/bbox/{cam_code}", json.dumps(msg), qos=0)
+    
+    try:
+        info = client.publish(topic, json.dumps(msg), qos=0)
+        if info.rc != 0:
+            log.warning(
+                "BBox publish rejected camera=%s topic=%s rc=%s",
+                cam_code,
+                topic,
+                info.rc,
+            )
+            return False
+        return True
+    except Exception:
+        log.exception("BBox publish exception camera=%s topic=%s", cam_code, topic)
+        return False
 

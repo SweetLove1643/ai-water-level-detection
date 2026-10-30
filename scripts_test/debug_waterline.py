@@ -30,7 +30,7 @@ def main() -> None:
 
     calibration = load_calibration(args.calibration)
     detector = WaterDetector()
-    water_mask = detector.predict_water_mask(frame)
+    water_mask, _ = detector.predict_with_detections(frame)
 
     surface_y = water_surface_y(water_mask, calibration)
     band_cm = level_band(surface_y, calibration)

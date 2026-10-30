@@ -8,7 +8,7 @@ from ultralytics import YOLO
 class WaterDetector:
     def __init__(self, weights_path: str | Path | None = None, confidence: float = 0.6) -> None:
         if not 0.0 <= confidence <= 1.0:
-            raise ValueError("Ngưỡng confidence model lỗi")
+            raise ValueError("Confidence threshold model error")
         if weights_path is None or not weights_path.is_file():
             raise FileNotFoundError(f"Model path failed: {weights_path}")
         self._model = YOLO(str(weights_path))
@@ -22,11 +22,11 @@ class WaterDetector:
             if str(name).strip().casefold() == "water"
         }
         if not self._water_class_ids:
-            raise ValueError(f"Model không có class 'water': {names}")
+            raise ValueError(f"Model classes not contain 'water': {names}")
 
     def predict_water_mask(self, frame: np.ndarray) -> np.ndarray:
         if frame.ndim != 3 or frame.shape[2] != 3:
-            raise ValueError("frame phải là ảnh màu có shape (height, width, 3)")
+            raise ValueError("frame must be a color image with shape (height, width, 3)")
 
         height, width = frame.shape[:2]
         water_mask = np.zeros((height, width), dtype=bool)
@@ -50,7 +50,7 @@ class WaterDetector:
 
         if len(class_ids) != len(masks):
             raise RuntimeError(
-                f"Số class và mask không khớp: {len(class_ids)} != {len(masks)}"
+                f"Number of classes and masks do not match: {len(class_ids)} != {len(masks)}"
             )
 
         for class_id, predicted_mask in zip(class_ids, masks):

@@ -24,11 +24,11 @@ class Calibration:
 
 def _normalized_point(value: object, field: str) -> tuple[float, float]:
     if not isinstance(value, list) or len(value) != 2:
-        raise ValueError(f"{field} phải có dạng [x, y]")
+        raise ValueError(f"{field} must have form [x, y]")
 
     x, y = float(value[0]), float(value[1])
     if not (0 <= x <= 1 and 0 <= y <= 1):
-        raise ValueError(f"{field} phải nằm trong tọa độ chuẩn hóa 0..1")
+        raise ValueError(f"{field} must be within normalized coordinates 0..1")
 
     return x, y
 
@@ -41,11 +41,11 @@ def load_calibration(path: str | Path) -> Calibration:
         for point in roi["points"]
     )
     if len(roi_points) < 3:
-        raise ValueError("ROI cần ít nhất 3 điểm")
+        raise ValueError("ROI must have at least 3 points")
 
     measure_x = float(roi["measure_x"])
     if not 0 <= measure_x <= 1:
-        raise ValueError("roi.measure_x phải nằm trong khoảng 0..1")
+        raise ValueError("roi.measure_x must be within normalized coordinates 0..1")
 
     marks = []
     for item in data["marks"]:
@@ -54,21 +54,21 @@ def load_calibration(path: str | Path) -> Calibration:
         p2 = _normalized_point(item["p2"], f"mark {cm}.p2")
 
         if p1[0] == p2[0]:
-            raise ValueError(f"Mark {cm} có p1.x và p2.x trùng nhau")
+            raise ValueError(f"Mark {cm} has p1.x and p2.x that are the same")
 
         # Nội suy vị trí y của đường mốc tại measure_x.
         t = (measure_x - p1[0]) / (p2[0] - p1[0])
         if not 0 <= t <= 1:
             raise ValueError(
-                f"measure_x không nằm trên đoạn mốc {cm} cm"
+                f"measure_x does not lie on the mark {cm} cm"
             )
 
-        y_at_measure = p1[1] + t * (p2[1] - p1[1])
+        y_at_measure = p1[1] + t * (p2[1] - p1[1]) # tính điểm trung tâm để làm mốc cần so sánh
         marks.append(Mark(cm, p1, p2, y_at_measure))
 
     marks.sort(key=lambda mark: mark.cm)
     if not marks:
-        raise ValueError("Cần ít nhất một mốc đo")
+        raise ValueError("Calibration must have at least one mark")
 
     for lower, higher in zip(marks, marks[1:]):
         if higher.y_at_measure >= lower.y_at_measure:
@@ -100,11 +100,11 @@ def water_surface_y(
 ) -> float | None:
     """Trả y mép nước dạng chuẩn hóa 0..1; None nếu không đủ tín hiệu."""
     if water_mask.ndim != 2:
-        raise ValueError("water_mask phải là mask 2D")
+        raise ValueError("water_mask must be a 2D mask")
 
     height, width = water_mask.shape
     if height == 0 or width == 0:
-        raise ValueError("water_mask rỗng")
+        raise ValueError("water_mask is empty")
 
     polygon = np.array(
         [

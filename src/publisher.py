@@ -65,7 +65,7 @@ def publish_event(client,
 
         if info.rc != 0:
             log.error(
-                "MQTT publish lỗi camera=%s topic=%s rc=%s",
+                "MQTT publish failed camera=%s topic=%s rc=%s",
                 cam_code,
                 topic,
                 info.rc,

@@ -25,19 +25,16 @@ class CameraWorker:
     def __init__(
         self,
         camera: CameraConfig,
-        zones: Sequence[dict[str, object]],
         publish_alert: Callable[[float, bytes], bool],
     ) -> None:
         self.camera = camera
-        self._zones = list(zones)
         self._publish_alert = publish_alert
-        self._zones_lock = threading.Lock()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
         if self._thread is not None:
-            raise RuntimeError(f"Woker cho camera {self.camera.code} đã được start")
+            raise RuntimeError(f"Woker for camera {self.camera.code} started")
 
         self._thread = threading.Thread(
             target=self._run,
@@ -45,15 +42,6 @@ class CameraWorker:
             daemon=True
         )
         self._thread.start()
-
-    def update_zones(self, zones: Sequence[dict[str, object]]) -> None:
-        with self._zones_lock:
-            self._zones = list(zones)
-        log.info("Đã cập nhật cung camera=%s count=%d", self.camera.code, len(zones))
-
-    def zones_snapshot(self) -> list[dict[str, object]]:
-        with self._zones_lock:
-            return list(self._zones)
 
     def stop(self, timeout: float = 7) -> None:
         self._stop_event.set()
@@ -64,22 +52,19 @@ class CameraWorker:
         self._thread.join(timeout=timeout)
 
         if self._thread.is_alive():
-            log.warning("Worker camera=%s chưa dừng sau %.1f giây", self.camera.code, timeout)
+            log.warning("Worker camera=%s haven't stopped yet %.1f second", self.camera.code, timeout)
 
     def _run(self) -> None:
         alert_state = AlertState()
         last_measurement_log = 0.0
 
         # Khởi tạo model
-        project_dir = Path(__file__).resolve().parents[1]
-        calibration = load_calibration(
-            project_dir / "resources" / "config" / "water_marks.json"
-        )
+        water_marks_path = Path(cf.WATER_MARKS_CONFIG_PATH)
+        calibration = load_calibration(water_marks_path)
 
         weight_path = Path(cf.WEIGHT_WATER_MODEL_SEGMENT_PATH)
         confidence = float(cf.WATER_MODEL_SEGMENT_CONFIDENCE)
-        
-        print(weight_path, confidence, isinstance(weight_path, str), isinstance(confidence, int), type(confidence))
+
         detector = WaterDetector(weights_path=weight_path, confidence=confidence)
 
         while not self._stop_event.is_set():
@@ -98,16 +83,16 @@ class CameraWorker:
                 )
 
                 if not capture.isOpened():
-                    log.warning("Không mở được RTSP rtsp=%s camera=%s", self.camera.rtsp_url, self.camera.code)
+                    log.warning("Cannot open RTSP rtsp=%s camera=%s", self.camera.rtsp_url, self.camera.code)
                 else:
-                    log.info("Đã mở RTSP camera=%s", self.camera.code)
+                    log.info("Opened RTSP camera=%s", self.camera.code)
 
                     while not self._stop_event.is_set():
                         ok, frame = capture.read()
 
                         if not ok or frame is None:
                             log.warning(
-                                "Không đọc được frame: camera=%s, ok=%s, frame_is_none=%s",
+                                "Cannot read frame: camera=%s, ok=%s, frame_is_none=%s",
                                 self.camera.code,
                                 ok,
                                 frame is None,
@@ -138,13 +123,13 @@ class CameraWorker:
                             encoded_ok, encoded = cv2.imencode(".jpg", frame)
 
                             if not encoded_ok:
-                                log.error("Không mã hóa được snapshot camera=%s", self.camera.code)
+                                log.error("Not able to encode snapshot camera=%s", self.camera.code)
                                 success = False
                             else:
                                 try:
                                     success = self._publish_alert(level_cm, encoded.tobytes())
                                 except Exception:
-                                    log.exception("Gửi cảnh báo lỗi camera=%s", self.camera.code)
+                                    log.exception("Send alert failed for camera=%s", self.camera.code)
                                     success = False
 
                             alert_state.record_attempt(
@@ -153,7 +138,7 @@ class CameraWorker:
                             )
                 
             except Exception:
-                log.exception("OpenCV gặp lỗi với camera=%s", self.camera.code)
+                log.exception("OpenCV failed for camera=%s", self.camera.code)
 
             finally:
                 if capture is not None:
@@ -162,4 +147,4 @@ class CameraWorker:
             if not self._stop_event.is_set():
                 self._stop_event.wait(RECONNECT_DELAY_S)
 
-        log.info("Worker camera=%s đã dừng", self.camera.code)
+        log.info("Worker camera=%s has stopped", self.camera.code)

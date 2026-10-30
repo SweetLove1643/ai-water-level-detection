@@ -22,7 +22,7 @@ Quan sát mực nước bằng mắt thường hoặc kiểm tra camera định 
 
 Phần triển khai của project kết hợp các thành phần sau thành một pipeline giám sát:
 
-1. Nhận cấu hình camera và AI zones qua MQTT.
+1. Nhận cấu hình camera qua MQTT.
 2. Đọc RTSP riêng cho từng camera worker.
 3. Dùng YOLO segmentation để tạo water mask.
 4. Giới hạn phép đo trong ROI và xác định mặt nước quanh vị trí đo đã cấu hình.
@@ -66,7 +66,7 @@ Model nền, weights được fine-tune, dataset và tài liệu của bên th�
 ## Luồng xử lý
 
 1. `main.py` nạp cấu hình, khởi tạo MQTT client và kết nối broker.
-2. `src/mqtt_client.py` nhận danh sách camera và AI zones từ MQTT, sau đó tạo worker cho camera.
+2. `src/mqtt_client.py` nhận danh sách camera từ MQTT, sau đó tạo worker cho camera.
 3. `src/worker.py` đọc RTSP, gọi detector, đo mặt nước và kiểm tra trạng thái cảnh báo.
 4. `src/state.py` áp dụng hysteresis và cooldown cho cảnh báo.
 5. `src/publisher.py` upload ảnh snapshot (nếu có) và gửi event MQTT.
@@ -127,7 +127,7 @@ Dừng ứng dụng bằng `Ctrl+C`. Log được ghi vào `logs/app.log` và co
 ```text
 main.py                         Điểm khởi chạy
 src/config.py                   Cấu hình môi trường
-src/config_manager.py           Ánh xạ camera/zones và quản lý worker
+src/config_manager.py           Ánh xạ camera và quản lý worker
 src/detector.py                 YOLO water segmentation
 src/waterline.py                ROI, calibration và tính mức nước
 src/state.py                    Trạng thái cảnh báo, hysteresis, cooldown
